@@ -56,4 +56,4 @@ The directory has Spanish and English pages at `/es` and `/en`, plus public prof
 
 ## Project status
 
-The source repository is public on GitHub. A production database, email sender, API endpoint, custom domain, and npm package still need to be configured or published before the service can accept real registrations.
+The source repository is public on GitHub and the Vercel project is connected to it. A production database, email sender, and required environment variables still need to be configured before the service can accept real registrations. The default Vercel deployment URL uses the project's current SSO protection; no public production deployment is serving traffic yet.
