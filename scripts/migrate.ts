@@ -1,0 +1,24 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { loadEnvConfig } from "@next/env";
+import { Pool } from "pg";
+
+loadEnvConfig(process.cwd());
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error("Set DATABASE_URL before running migrations.");
+
+async function main(): Promise<void> {
+  const pool = new Pool({ connectionString, max: 1 });
+  try {
+    const migration = await readFile(resolve("infra/migrations/001_initial.sql"), "utf8");
+    await pool.query(migration);
+    console.log("Applied 001_initial.sql");
+  } finally {
+    await pool.end();
+  }
+}
+
+void main().catch((cause: unknown) => {
+  console.error(cause instanceof Error ? cause.message : "Migration failed.");
+  process.exitCode = 1;
+});
