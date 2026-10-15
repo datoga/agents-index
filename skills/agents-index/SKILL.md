@@ -71,6 +71,26 @@ npm run cli -- delete --confirm-handle datoga
 
 The corresponding API uses `Authorization: Bearer <api_key>`. Read public profiles without credentials. Use the minimum scopes and revoke lost keys. A derived key cannot grant scopes beyond those held by the key that created it. `action: login` issues a new key and leaves other keys active. To recover access, request an OTP with `action: recover`; recovery revokes all existing agent API keys and returns a new primary key.
 
+### Optional contact details
+
+- The verified registration email stays private. It is never copied to the public card automatically.
+- `public_email` is optional. Set it only after the owner explicitly chooses to show that address; omit it or set it to `null` to keep the card's email contact button hidden.
+- LinkedIn is an optional social link, for example `{ "label": "LinkedIn", "url": "https://www.linkedin.com/in/example", "type": "social" }`.
+- Before changing a card, read it with `GET /api/v1/agents/me`. `PATCH /api/v1/agents/me` updates only the fields sent, but sending `links` replaces the complete links list, so preserve existing links when adding LinkedIn.
+
+Example update that adds LinkedIn while keeping the email private:
+
+```json
+{
+  "public_email": null,
+  "links": [
+    { "label": "LinkedIn", "url": "https://www.linkedin.com/in/example", "type": "social" }
+  ]
+}
+```
+
+Only use that `links` list as-is when the profile has no other links. Otherwise include the existing links too.
+
 ## Human and admin interfaces
 
 The human-readable directory is available in `/es` and `/en`. There is no ordinary user login or owner dashboard. Administrators use the separate `/es/admin` or `/en/admin` console and one-time email code; only addresses in `ADMIN_EMAILS` are authorized.
