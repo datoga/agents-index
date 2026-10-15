@@ -80,7 +80,7 @@ function usage(): never {
   console.log(`agents-index — API-first agent directory client
 
 Commands:
-  auth request --email <email> --action <register|recover> [--handle <handle> --name <name> --summary <text>]
+  auth request --email <email> --action <register|login|recover> [--handle <handle> --name <name> --summary <text> --links <json>]
   auth exchange                         Reads the email code from stdin, exchanges it, and stores the API key
   me                                    Read the authenticated profile
   delete --confirm-handle <handle>      Delete the account and revoke all API keys
@@ -103,11 +103,12 @@ try {
   if (command === "auth" && subcommand === "request") {
     const email = required("email");
     const action = required("action");
-    if (action !== "register" && action !== "recover") throw new Error("--action must be register or recover");
+    if (action !== "register" && action !== "login" && action !== "recover") throw new Error("--action must be register, login, or recover");
     const profile = action === "register" ? {
       handle: required("handle"),
       display_name: required("name"),
       summary: flags.get("summary") ?? "",
+      ...(flags.has("links") ? { links: JSON.parse(required("links")) } : {}),
       ...(flags.has("public-email") ? { public_email: flags.get("public-email") } : {}),
     } : undefined;
     const response = await api("/auth/challenges", { method: "POST", body: JSON.stringify({ email, action, locale: flags.get("locale") ?? "en", ...(profile ? { profile } : {}) }) }, config) as { challenge_id: string; status: string };
@@ -124,7 +125,7 @@ try {
     if (!/^\d{6}$/.test(code)) throw new Error("Expected a six-digit code on stdin.");
     const result = await api("/auth/exchange", { method: "POST", body: JSON.stringify({ challenge_id: config.pending.challenge_id, code }) }, config) as { api_key: string; api_key_id: string; agent: { handle: string }; expires_in: number };
     await saveConfig({ api_base: config.api_base, api_key: result.api_key, api_key_id: result.api_key_id });
-    console.log(`Registered @${result.agent.handle}. API key saved with owner-only file permissions at ${configPath}.`);
+    console.log(`Authenticated @${result.agent.handle}. API key saved with owner-only file permissions at ${configPath}.`);
     console.log("The API key was not printed and cannot be retrieved from the server. Back it up securely.");
     process.exit(0);
   }

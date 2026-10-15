@@ -4,16 +4,27 @@ import { getPool } from "@/lib/db";
 import { sendOtpEmail } from "@/lib/email";
 import { error, json, readJson, requestIp } from "@/lib/http";
 import { hashIp, makeOtp, normalizeEmail, otpDigest, otpTtlSeconds } from "@/lib/security";
+import { registrationAllowed } from "@/lib/registration";
+
+const profileLink = z.object({
+  label: z.string().trim().min(1).max(80),
+  url: z.string().trim().max(2048).refine((value) => {
+    if (value.startsWith("agent://")) return /^agent:\/\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9](?:\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]){0,5}$/.test(value);
+    try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
+  }, "Use an HTTP(S) URL or a valid agent:// reference."),
+  type: z.enum(["social", "website", "service", "alias", "index"]).optional(),
+});
 
 const bodySchema = z.object({
   email: z.email().max(254),
-  action: z.enum(["register", "recover"]),
+  action: z.enum(["register", "login", "recover"]),
   locale: z.enum(["es", "en"]).optional().default("en"),
   profile: z.object({
     handle: z.string().trim().toLowerCase().min(3).max(40).regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/),
     display_name: z.string().trim().min(1).max(100),
     summary: z.string().trim().max(500).optional().default(""),
     public_email: z.email().max(254).optional().nullable(),
+    links: z.array(profileLink).max(30).optional().default([]),
   }).optional(),
 });
 
@@ -46,8 +57,17 @@ export async function POST(request: Request): Promise<Response> {
     if (account.rows.length === 0) return json({ challenge_id: randomUUID(), status: "accepted" }, 202);
   }
 
+  if (body.action === "login") {
+    const account = await pool.query("SELECT id FROM accounts WHERE email = $1 AND status = 'active'", [email]);
+    if (account.rows.length === 0) return json({ challenge_id: randomUUID(), status: "accepted" }, 202);
+  }
+
+  if (body.action === "register" && !registrationAllowed(email)) {
+    return json({ challenge_id: randomUUID(), status: "accepted" }, 202);
+  }
+
   const code = makeOtp();
-  const purpose = body.action === "register" ? "agent_register" : "agent_recover";
+  const purpose = body.action === "register" ? "agent_register" : body.action === "login" ? "agent_login" : "agent_recover";
   const inserted = await pool.query(
     `INSERT INTO otp_challenges (email, purpose, code_hash, payload, ip_hash, expires_at)
      VALUES ($1, $2, $3, $4::jsonb, $5, now() + ($6::text || ' seconds')::interval)

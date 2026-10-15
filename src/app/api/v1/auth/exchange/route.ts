@@ -23,7 +23,7 @@ export async function POST(request: Request): Promise<Response> {
       [body.challenge_id],
     );
     const challenge = found.rows[0] as { id: string; email: string; purpose: string; code_hash: string; payload: Record<string, unknown>; expires_at: Date; attempts: number; consumed_at: Date | null } | undefined;
-    const invalid = !challenge || challenge.consumed_at || new Date(challenge.expires_at).getTime() <= Date.now() || challenge.attempts >= 5 || !["agent_register", "agent_recover"].includes(challenge.purpose);
+    const invalid = !challenge || challenge.consumed_at || new Date(challenge.expires_at).getTime() <= Date.now() || challenge.attempts >= 5 || !["agent_register", "agent_login", "agent_recover"].includes(challenge.purpose);
     if (invalid) {
       await client.query("ROLLBACK");
       return error("Invalid, expired, or already used code.", 400, "invalid_code");
@@ -40,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
     let accountId: string;
     let handle: string;
     if (challenge.purpose === "agent_register") {
-      const profile = challenge.payload as { handle?: string; display_name?: string; summary?: string; public_email?: string | null };
+      const profile = challenge.payload as { handle?: string; display_name?: string; summary?: string; public_email?: string | null; links?: { label: string; url: string; type?: string }[] };
       if (!profile.handle || !profile.display_name) {
         await client.query("ROLLBACK");
         return error("Registration data is incomplete.", 400, "invalid_registration");
@@ -56,9 +56,9 @@ export async function POST(request: Request): Promise<Response> {
       );
       accountId = (account.rows[0] as { id: string }).id;
       const profileResult = await client.query(
-        `INSERT INTO profiles (account_id, handle, display_name, summary, public_email)
-         VALUES ($1, $2, $3, $4, $5) RETURNING handle`,
-        [accountId, profile.handle, profile.display_name, profile.summary ?? "", profile.public_email ?? null],
+        `INSERT INTO profiles (account_id, handle, display_name, summary, public_email, links)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING handle`,
+        [accountId, profile.handle, profile.display_name, profile.summary ?? "", profile.public_email ?? null, JSON.stringify(profile.links ?? [])],
       );
       handle = (profileResult.rows[0] as { handle: string }).handle;
     } else {
@@ -69,9 +69,17 @@ export async function POST(request: Request): Promise<Response> {
         return error("Unable to recover this account.", 400, "invalid_code");
       }
       accountId = row.id;
-      await client.query("UPDATE api_tokens SET revoked_at = now() WHERE account_id = $1 AND revoked_at IS NULL", [accountId]);
+      await client.query("UPDATE accounts SET email_verified_at = COALESCE(email_verified_at, now()) WHERE id = $1", [accountId]);
+      if (challenge.purpose === "agent_recover") {
+        await client.query("UPDATE api_tokens SET revoked_at = now() WHERE account_id = $1 AND revoked_at IS NULL", [accountId]);
+      }
       const profileResult = await client.query("SELECT handle FROM profiles WHERE account_id = $1", [accountId]);
-      handle = (profileResult.rows[0] as { handle: string }).handle;
+      const profileRow = profileResult.rows[0] as { handle: string } | undefined;
+      if (!profileRow) {
+        await client.query("ROLLBACK");
+        return error("Unable to recover this account.", 400, "invalid_code");
+      }
+      handle = profileRow.handle;
     }
 
     const apiKey = createApiKey();

@@ -1,0 +1,17 @@
+import { json } from "@/lib/http";
+import { publicIndexConfig } from "@/lib/registration";
+
+export async function GET(): Promise<Response> {
+  const config = publicIndexConfig();
+  return json({
+    protocol: "agents-index/1",
+    name: config.name,
+    handle: config.handle,
+    url: config.url,
+    parent_index_url: config.parent_index_url,
+    registration: { mode: config.registration_mode },
+    api: { base_url: `${config.url}/api/v1`, openapi_url: `${config.url}/api/v1/openapi.json` },
+    agent_uri: "agent://{handle}[/{handle}...]",
+    capabilities: ["profiles", "federated-indices", "agent-uri-resolution", "directional-links", "email-otp"],
+  });
+}

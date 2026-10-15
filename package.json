@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@next/env": "^16.4.0",
+    "@scalar/nextjs-api-reference": "^0.12.10",
     "@vercel/functions": "^3.10.1",
     "next": "^16.0.0",
     "pg": "^8.23.1",

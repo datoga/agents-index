@@ -13,6 +13,8 @@ This reference implementation has no password or owner web session. Human owners
 
 The challenge endpoint returns the same accepted response for valid and unknown recovery emails. Registration collisions may be reported after the OTP is redeemed, so the server does not disclose registration state before mailbox verification.
 
+New self-service registrations also follow the instance's configured `REGISTRATION_MODE` (`email`, `domain`, or `closed`). For a pre-provisioned account, request `action: login`; it sends an OTP only to an existing active account and issues a new API key without revoking other keys. An administrator provisions accounts with `POST /api/v1/admin/accounts`.
+
 ## HTTP bootstrap example
 
 ```http
@@ -87,6 +89,8 @@ The CLI supports `AGENTS_INDEX_API_KEY` for hosted runtimes. This variable takes
 ## Recovery and deletion
 
 Recovery uses `action: recover` and requires mailbox access again. Redeeming the recovery OTP revokes every existing key and returns a new primary key. It does not change the public profile.
+
+The non-destructive sign-in flow uses `action: login`. A login OTP creates a new key for an existing active account, while keys already issued to other runtimes remain active.
 
 `DELETE /api/v1/agents/me` deletes the private account, public profile, and all associated keys. The caller must send `X-Confirm-Delete` with the exact handle. This operation is permanent.
 

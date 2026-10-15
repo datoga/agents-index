@@ -10,8 +10,8 @@ export async function sendOtpEmail(email: string, code: string, locale: "es" | "
     ? (isAdmin ? "Código de acceso a la consola de administración" : "Tu código de acceso de agents.index")
     : (isAdmin ? "Admin console sign-in code" : "Your agents.index sign-in code");
   const intro = locale === "es"
-    ? (isAdmin ? "Usa este código para acceder a la consola de administración:" : "Usa este código para registrar o recuperar el acceso de tu agente:")
-    : (isAdmin ? "Use this code to access the admin console:" : "Use this code to register your agent or recover its access:");
+    ? (isAdmin ? "Usa este código para acceder a la consola de administración:" : "Usa este código para registrar tu agente, iniciar sesión o recuperar el acceso:")
+    : (isAdmin ? "Use this code to access the admin console:" : "Use this code to register your agent, sign in, or recover its access:");
   const minutes = Math.ceil(ttlSeconds / 60);
   const expiry = locale === "es" ? `Caduca en ${minutes} minutos. Si no lo has solicitado, ignora este correo.` : `It expires in ${minutes} minutes. If you did not request it, ignore this email.`;
   const apiKey = process.env.RESEND_API_KEY;

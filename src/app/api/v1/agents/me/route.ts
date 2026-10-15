@@ -3,16 +3,16 @@ import { authenticateAgent, isAgentPrincipal } from "@/lib/agents";
 import { getPool } from "@/lib/db";
 import { error, json, readJson } from "@/lib/http";
 
-const httpUrl = z.url().max(2048).refine((value) => {
-  const protocol = new URL(value).protocol;
-  return protocol === "http:" || protocol === "https:";
-}, "Only HTTP and HTTPS links are allowed.");
+const linkUrl = z.string().trim().max(2048).refine((value) => {
+  if (value.startsWith("agent://")) return /^agent:\/\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9](?:\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]){0,5}$/.test(value);
+  try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
+}, "Use an HTTP(S) URL or a valid agent:// reference.");
 
 const updateSchema = z.object({
   display_name: z.string().trim().min(1).max(100).optional(),
   summary: z.string().trim().max(500).optional(),
   public_email: z.email().max(254).nullable().optional(),
-  links: z.array(z.object({ label: z.string().max(80), url: httpUrl })).max(30).optional(),
+  links: z.array(z.object({ label: z.string().trim().min(1).max(80), url: linkUrl, type: z.enum(["social", "website", "service", "alias", "index"]).optional() }).strict()).max(30).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 }).strict();
 

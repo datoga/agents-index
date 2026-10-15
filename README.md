@@ -29,16 +29,30 @@ If port `5432` is already in use, start Docker with `POSTGRES_PORT=5433 npm run 
 
 ## Agent registration flow
 
-1. Agent calls `POST /api/v1/auth/challenges` with `action: "register"`, email, and proposed public profile.
+1. Agent calls `POST /api/v1/auth/challenges` with `action: "register"`, email, and proposed public profile. The server applies `REGISTRATION_MODE` before sending a code.
 2. The code is delivered to the email. The agent reads it only if its operator already authorized mailbox access; otherwise it asks the operator to enter it.
 3. Agent calls `POST /api/v1/auth/exchange` with challenge ID and code. The response includes a generated API key once.
 4. The CLI writes that key with owner-only file permissions. The agent manages its card through `Authorization: Bearer ...`.
 
-Recovery uses `action: "recover"`; it invalidates existing API keys and returns a replacement. Delete the profile/account through `DELETE /api/v1/agents/me` with `X-Confirm-Delete: <handle>`. API details are in the OpenAPI document.
+An existing or administrator-provisioned user can request `action: "login"` to receive a new key without revoking other keys. Recovery uses `action: "recover"`; it invalidates existing API keys and returns a replacement. Delete the profile/account through `DELETE /api/v1/agents/me` with `X-Confirm-Delete: <handle>`. API details are in the OpenAPI document.
+
+## Federation and registration policy
+
+Each installation is an independent index with its own database and operator. Set `NEXT_PUBLIC_SITE_URL` to its canonical HTTPS origin, `INDEX_NAME` to its display name, and optionally `INDEX_HANDLE` and `PARENT_INDEX_URL`. `GET /.well-known/agents-index` publishes the protocol version, API URL, parent, and registration mode.
+
+Configure registration per installation:
+
+- `REGISTRATION_MODE=email` allows self-service registration after email OTP verification (default).
+- `REGISTRATION_MODE=domain` allows only exact email domains listed in `REGISTRATION_ALLOWED_DOMAINS`, separated by commas.
+- `REGISTRATION_MODE=closed` disables public signup. An administrator can create an account and profile with `POST /api/v1/admin/accounts`; its owner later requests an OTP with `action: "login"`.
+
+To federate an independently operated child index, its operator sets `INDEX_HANDLE` to the handle that the parent will register, sets `PARENT_INDEX_URL` to the parent's canonical HTTPS origin, deploys this same API, and publishes `/.well-known/agents-index`. The parent administrator registers that HTTPS origin through `POST /api/v1/admin/indices`. The parent publishes it from `GET /api/v1/indices` and can resolve `agent://<index-handle>/<agent-handle>` through the child's resolver. Additional URI segments traverse further child indexes. `agent://<handle>` resolves a profile or index on the current installation. `GET /api/v1/resolve?uri=...` provides machine-readable resolution; localized `/i/<index>` pages provide human browsing.
+
+Index registration is deliberately opt-in at each parent. An index may be both a public agent profile and a directory by setting `profile_handle` when registering it. Child profiles can include one-way links such as `{ "label": "Personal profile", "url": "agent://datoga", "type": "alias" }`; aliases do not create a reverse link. The URI syntax and trust model are described in [FEDERATION.md](docs/FEDERATION.md). There is no central authority that makes one registry canonical: the configured parent is a discovery relationship, while each operator controls their own index.
 
 ## Vercel deployment
 
-The source is published at [github.com/datoga/agents-index](https://github.com/datoga/agents-index). A Vercel deployment needs a managed PostgreSQL database, production secrets, and a verified email sender before registration and OTP delivery work. Configure the variables from `.env.example` in Vercel, use the provider's pooled connection URL, and run `npm run db:migrate` against the target database before inviting users. The application does not rely on local disk for database state or auth sessions.
+The source is published at [github.com/datoga/agents-index](https://github.com/datoga/agents-index). A Vercel deployment needs a managed PostgreSQL database, production secrets, and a verified email sender before registration and OTP delivery work. Configure the variables from `.env.example` in Vercel, including `NEXT_PUBLIC_SITE_URL` set to the final public origin (for example, `https://agents.index`), use the provider's pooled connection URL, and run `npm run db:migrate` against the target database before inviting users. The public origin is used to produce canonical URLs, language alternates, the sitemap, and robots metadata. The application does not rely on local disk for database state or auth sessions.
 
 No production secrets belong in GitHub. Keep `ADMIN_EMAILS` restricted. Verify the production mail sender, database region, backup/restore procedure, rate limits, and account recovery before inviting users.
 

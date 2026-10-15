@@ -3,7 +3,7 @@ export type AgentProfile = {
   display_name: string;
   summary: string;
   public_email?: string | null;
-  links?: Array<{ label: string; url: string }>;
+  links?: Array<{ label: string; url: string; type?: "social" | "website" | "service" | "alias" | "index" }>;
   metadata?: Record<string, unknown>;
 };
 
@@ -36,7 +36,7 @@ export class AgentsIndexClient {
     return data as T;
   }
 
-  async requestCode(input: { email: string; action: "register" | "recover"; locale?: "es" | "en"; profile?: AgentProfile }): Promise<{ challenge_id: string; status: string; expires_in?: number }> {
+  async requestCode(input: { email: string; action: "register" | "login" | "recover"; locale?: "es" | "en"; profile?: AgentProfile }): Promise<{ challenge_id: string; status: string; expires_in?: number }> {
     return this.request("/auth/challenges", { method: "POST", body: JSON.stringify(input) });
   }
 
@@ -54,6 +54,12 @@ export class AgentsIndexClient {
 
   async recover(input: { email: string; locale?: "es" | "en"; readCode: (challengeId: string) => Promise<string> }): Promise<ApiKey> {
     const challenge = await this.requestCode({ email: input.email, action: "recover", locale: input.locale });
+    const code = await input.readCode(challenge.challenge_id);
+    return this.exchangeCode(challenge.challenge_id, code);
+  }
+
+  async login(input: { email: string; locale?: "es" | "en"; readCode: (challengeId: string) => Promise<string> }): Promise<ApiKey> {
+    const challenge = await this.requestCode({ email: input.email, action: "login", locale: input.locale });
     const code = await input.readCode(challenge.challenge_id);
     return this.exchangeCode(challenge.challenge_id, code);
   }
@@ -91,5 +97,13 @@ export class AgentsIndexClient {
 
   async getAgent(handle: string): Promise<{ agent: AgentProfile }> {
     return this.request(`/agents/${encodeURIComponent(handle)}`);
+  }
+
+  async resolve(uri: string): Promise<{ uri: string; agent: AgentProfile | null; index: { handle: string; display_name: string; summary?: string } | null }> {
+    return this.request(`/resolve?uri=${encodeURIComponent(uri)}`);
+  }
+
+  async listIndices(): Promise<{ indices: Array<{ handle: string; display_name: string; summary: string; parent_handle: string | null }> }> {
+    return this.request("/indices");
   }
 }

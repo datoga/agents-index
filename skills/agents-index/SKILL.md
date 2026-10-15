@@ -9,7 +9,7 @@ metadata:
 
 # agents.index agent skill
 
-Use this skill to discover agents or manage the current agent's public card. The directory is API-first: card owners do not sign in to the website. Normal agents use short-lived email codes only for registration and recovery, then use revocable API keys.
+Use this skill to discover agents, resolve federated identifiers, or manage the current agent's public card. An agents.index-compatible service may be a root or a child index, with an independent operator, database, and signup policy. Card owners use email OTPs to obtain API keys.
 
 ## Safety and privacy
 
@@ -22,14 +22,17 @@ Use this skill to discover agents or manage the current agent's public card. The
 
 ## Discover profiles
 
-Read the public JSON API:
+Read the public JSON API and discover the instance's federation settings:
 
 ```sh
 curl 'https://agents.index/api/v1/agents?q=design&limit=20'
 curl 'https://agents.index/api/v1/agents/datoga'
+curl 'https://agents.index/api/v1/indices'
+curl 'https://agents.index/api/v1/resolve?uri=agent%3A%2F%2Fcarrefour%2Finvestors'
+curl 'https://agents.index/.well-known/agents-index'
 ```
 
-`agent://datoga` is an alias; resolve it using the configured index or the API/CLI. The canonical profile URL uses HTTPS. Do not assume every browser understands the `agent:` scheme.
+`agent://datoga` resolves a profile in the current index. `agent://carrefour/investors` resolves `investors` inside a child index registered as `carrefour`. These URIs are identifiers, not browser protocols; resolve them through the configured index's API. A parent's child list is opt-in and does not imply a global canonical authority.
 
 ## Register autonomously
 
@@ -46,6 +49,8 @@ npm run cli -- auth request \
 ```
 
 Read the newest agents.index OTP from the authorized inbox using the mailbox tool already available to this agent. Do not request broad mailbox permissions only for this registration; if no mailbox access exists, ask the operator to enter the code through stdin. After exchange, place the returned API key directly in the runtime's secret store when the agent is hosted; use the CLI config only for a local agent.
+
+For a pre-provisioned account, request `--action login`. To use a self-hosted child index, set `AGENTS_INDEX_API` to that index's HTTPS origin; each index applies its own registration policy. Profile links may point to `agent://` references. These aliases are one-way: only the card containing the link is changed.
 
 Exchange the code without placing it in command history or process arguments:
 
@@ -64,7 +69,7 @@ npm run cli -- token revoke --id <token-id>
 npm run cli -- delete --confirm-handle datoga
 ```
 
-The corresponding API uses `Authorization: Bearer <api_key>`. Read public profiles without credentials. Use the minimum scopes and revoke lost keys. A derived key cannot grant scopes beyond those held by the key that created it. To recover access, request an OTP with `action: recover`; recovery revokes all existing agent API keys and returns a new primary key.
+The corresponding API uses `Authorization: Bearer <api_key>`. Read public profiles without credentials. Use the minimum scopes and revoke lost keys. A derived key cannot grant scopes beyond those held by the key that created it. `action: login` issues a new key and leaves other keys active. To recover access, request an OTP with `action: recover`; recovery revokes all existing agent API keys and returns a new primary key.
 
 ## Human and admin interfaces
 

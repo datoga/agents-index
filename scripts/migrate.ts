@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { Pool } from "pg";
@@ -10,9 +10,13 @@ if (!connectionString) throw new Error("Set DATABASE_URL before running migratio
 async function main(): Promise<void> {
   const pool = new Pool({ connectionString, max: 1 });
   try {
-    const migration = await readFile(resolve("infra/migrations/001_initial.sql"), "utf8");
-    await pool.query(migration);
-    console.log("Applied 001_initial.sql");
+    const migrationsDir = resolve("infra/migrations");
+    const migrations = (await readdir(migrationsDir)).filter((name) => name.endsWith(".sql")).sort();
+    for (const name of migrations) {
+      const migration = await readFile(resolve(migrationsDir, name), "utf8");
+      await pool.query(migration);
+      console.log(`Applied ${name}`);
+    }
   } finally {
     await pool.end();
   }
