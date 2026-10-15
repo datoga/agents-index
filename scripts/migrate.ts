@@ -4,8 +4,10 @@ import { loadEnvConfig } from "@next/env";
 import { Pool } from "pg";
 
 loadEnvConfig(process.cwd());
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("Set DATABASE_URL before running migrations.");
+const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+if (!connectionString) {
+  throw new Error("Set DATABASE_URL or POSTGRES_URL before running migrations.");
+}
 
 async function main(): Promise<void> {
   const pool = new Pool({ connectionString, max: 1 });
