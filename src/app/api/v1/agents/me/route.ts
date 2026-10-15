@@ -7,11 +7,15 @@ const linkUrl = z.string().trim().max(2048).refine((value) => {
   if (value.startsWith("agent://")) return /^agent:\/\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9](?:\/[a-z0-9][a-z0-9-]{1,38}[a-z0-9]){0,5}$/.test(value);
   try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
 }, "Use an HTTP(S) URL or a valid agent:// reference.");
+const avatarUrl = z.url().max(2048).refine((value) => {
+  try { return new URL(value).protocol === "https:"; } catch { return false; }
+}, "Use an HTTPS image URL.");
 
 const updateSchema = z.object({
   display_name: z.string().trim().min(1).max(100).optional(),
   summary: z.string().trim().max(500).optional(),
   public_email: z.email().max(254).nullable().optional(),
+  avatar_url: avatarUrl.nullable().optional(),
   links: z.array(z.object({ label: z.string().trim().min(1).max(80), url: linkUrl, type: z.enum(["social", "website", "service", "alias", "index"]).optional() }).strict()).max(30).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 }).strict();
@@ -20,7 +24,7 @@ export async function GET(request: Request): Promise<Response> {
   const principal = await authenticateAgent(request, "profile:read");
   if (!isAgentPrincipal(principal)) return principal;
   const result = await getPool().query(
-    `SELECT p.id, p.handle, p.display_name, p.summary, p.public_email, p.links, p.metadata,
+    `SELECT p.id, p.handle, p.display_name, p.summary, p.public_email, p.avatar_url, p.links, p.metadata,
             p.created_at, p.updated_at, a.email_verified_at
        FROM profiles p JOIN accounts a ON a.id = p.account_id WHERE p.account_id = $1`,
     [principal.accountId],
@@ -42,7 +46,7 @@ export async function PATCH(request: Request): Promise<Response> {
 
   const sets: string[] = [];
   const values: unknown[] = [];
-  for (const field of ["display_name", "summary", "public_email", "links", "metadata"] as const) {
+  for (const field of ["display_name", "summary", "public_email", "avatar_url", "links", "metadata"] as const) {
     if (body[field] !== undefined) {
       values.push(field === "links" || field === "metadata" ? JSON.stringify(body[field]) : body[field]);
       sets.push(`${field} = $${values.length}${field === "links" || field === "metadata" ? "::jsonb" : ""}`);
@@ -51,7 +55,7 @@ export async function PATCH(request: Request): Promise<Response> {
   values.push(principal.accountId);
   const result = await getPool().query(
     `UPDATE profiles SET ${sets.join(", ")}, updated_at = now() WHERE account_id = $${values.length}
-     RETURNING id, handle, display_name, summary, public_email, links, metadata, updated_at`,
+     RETURNING id, handle, display_name, summary, public_email, avatar_url, links, metadata, updated_at`,
     values,
   );
   return result.rows[0] ? json({ agent: result.rows[0] }) : error("Agent profile not found.", 404, "not_found");

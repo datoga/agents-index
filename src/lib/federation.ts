@@ -5,6 +5,7 @@ export type FederatedIndex = {
   handle: string;
   display_name: string;
   summary: string;
+  avatar_url: string | null;
   endpoint_url: string;
   parent_handle: string | null;
   status: "active" | "suspended";
@@ -14,7 +15,7 @@ export type FederatedIndex = {
 export async function getPublicIndices(): Promise<Omit<FederatedIndex, "endpoint_url" | "status" | "profile_handle">[]> {
   const result = await getPool().query(
     `SELECT i.handle, COALESCE(p.display_name, i.display_name) AS display_name,
-            COALESCE(NULLIF(p.summary, ''), i.summary) AS summary, i.parent_handle
+            COALESCE(NULLIF(p.summary, ''), i.summary) AS summary, p.avatar_url, i.parent_handle
        FROM federated_indices i LEFT JOIN profiles p ON p.handle = i.profile_handle
       WHERE i.status = 'active' ORDER BY i.handle`,
   );
@@ -24,7 +25,7 @@ export async function getPublicIndices(): Promise<Omit<FederatedIndex, "endpoint
 export async function getPublicIndex(handle: string): Promise<Omit<FederatedIndex, "endpoint_url" | "status"> | null> {
   const result = await getPool().query(
     `SELECT i.handle, COALESCE(p.display_name, i.display_name) AS display_name,
-            COALESCE(p.summary, i.summary) AS summary, i.parent_handle, i.profile_handle
+            COALESCE(p.summary, i.summary) AS summary, p.avatar_url, i.parent_handle, i.profile_handle
        FROM federated_indices i LEFT JOIN profiles p ON p.handle = i.profile_handle
       WHERE i.handle = $1 AND i.status = 'active'`,
     [handle],
@@ -144,7 +145,7 @@ export async function resolveAgentUri(uri: string, hops = 0): Promise<{ agent: u
 
   if (normalizedSegments.length === 0) {
     const [agentResult, indexResult] = await Promise.all([
-      pool.query("SELECT handle, display_name, summary, public_email, links, metadata, updated_at FROM profiles WHERE handle = $1", [indexHandle]),
+      pool.query("SELECT handle, display_name, summary, public_email, avatar_url, links, metadata, updated_at FROM profiles WHERE handle = $1", [indexHandle]),
       pool.query("SELECT handle, display_name, summary, parent_handle FROM federated_indices WHERE handle = $1 AND status = 'active'", [indexHandle]),
     ]);
     const agent = agentResult.rows[0] ?? null;
@@ -157,7 +158,7 @@ export async function resolveAgentUri(uri: string, hops = 0): Promise<{ agent: u
     if (normalizedSegments.length === 1) {
       const targetHandle = normalizedSegments[0]!;
       const [agentResult, childIndexResult] = await Promise.all([
-        pool.query("SELECT handle, display_name, summary, public_email, links, metadata, updated_at FROM profiles WHERE handle = $1", [targetHandle]),
+        pool.query("SELECT handle, display_name, summary, public_email, avatar_url, links, metadata, updated_at FROM profiles WHERE handle = $1", [targetHandle]),
         pool.query("SELECT handle, display_name, summary, parent_handle FROM federated_indices WHERE handle = $1 AND status = 'active'", [targetHandle]),
       ]);
       const agent = agentResult.rows[0] ?? null;

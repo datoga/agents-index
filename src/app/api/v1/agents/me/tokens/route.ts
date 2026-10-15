@@ -4,10 +4,10 @@ import { getPool } from "@/lib/db";
 import { error, json, readJson } from "@/lib/http";
 import { createApiKey } from "@/lib/security";
 
-const allowedScopes = ["profile:read", "profile:write", "profile:delete", "tokens:manage"] as const;
+const allowedScopes = ["profile:read", "profile:write", "profile:delete", "tokens:manage", "messages:send", "messages:read"] as const;
 const schema = z.object({
   label: z.string().trim().min(1).max(80),
-  scopes: z.array(z.enum(allowedScopes)).min(1).max(4).optional().default(["profile:read", "profile:write"]),
+  scopes: z.array(z.enum(allowedScopes)).min(1).max(6).optional().default(["profile:read", "profile:write"]),
   expires_in_days: z.number().int().min(1).max(365).optional().default(90),
 });
 

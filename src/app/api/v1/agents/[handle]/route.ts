@@ -7,7 +7,7 @@ export async function GET(_request: Request, context: { params: Promise<{ handle
   const normalized = handle.toLowerCase();
   if (!z.string().regex(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/).safeParse(normalized).success) return error("Invalid handle.", 400, "invalid_request");
   const result = await getPool().query(
-    `SELECT handle, display_name, summary, public_email, links, metadata, created_at, updated_at
+    `SELECT handle, display_name, summary, public_email, avatar_url, links, metadata, created_at, updated_at
        FROM profiles WHERE handle = $1`,
     [normalized],
   );

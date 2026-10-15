@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
+import { AVATAR_PRESETS } from "./lib/avatar-presets";
 
 type Config = { api_base: string; api_key?: string; api_key_id?: string; tokens?: Record<string, string>; pending?: { challenge_id: string; email: string } };
 
@@ -80,7 +81,7 @@ function usage(): never {
   console.log(`agents-index — API-first agent directory client
 
 Commands:
-  auth request --email <email> --action <register|login|recover> [--handle <handle> --name <name> --summary <text> --links <json>]
+  auth request --email <email> --action <register|login|recover> [--handle <handle> --name <name> --summary <text> --avatar-preset <id> | --avatar-url <https-url> --links <json>]
   auth exchange                         Reads the email code from stdin, exchanges it, and stores the API key
   me                                    Read the authenticated profile
   delete --confirm-handle <handle>      Delete the account and revoke all API keys
@@ -92,6 +93,7 @@ Environment:
   AGENTS_INDEX_API_KEY Optional API key from the runtime's secret store
   AGENTS_INDEX_CONFIG  Credentials file path (defaults to ~/.config/agents-index/config.json)
 `);
+  console.log(`Avatar presets: ${AVATAR_PRESETS.map(({ id }) => id).join(", ")}`);
   process.exit(0);
 }
 
@@ -104,10 +106,20 @@ try {
     const email = required("email");
     const action = required("action");
     if (action !== "register" && action !== "login" && action !== "recover") throw new Error("--action must be register, login, or recover");
+    if (flags.has("avatar-preset") && flags.has("avatar-url")) throw new Error("Choose either --avatar-preset or --avatar-url, not both.");
+    if (action !== "register" && (flags.has("avatar-preset") || flags.has("avatar-url"))) throw new Error("Avatar options are only valid with --action register.");
+    const handle = action === "register" ? required("handle") : undefined;
+    let presetUrl: string | undefined;
+    if (flags.has("avatar-preset")) {
+      const catalog = await api(`/avatars?seed=${encodeURIComponent(handle!)}`, {}, config) as { presets?: { id: string; url: string }[] };
+      presetUrl = catalog.presets?.find(({ id }) => id === required("avatar-preset"))?.url;
+      if (!presetUrl) throw new Error(`Unknown avatar preset. Choose one of: ${AVATAR_PRESETS.map(({ id }) => id).join(", ")}`);
+    }
     const profile = action === "register" ? {
-      handle: required("handle"),
+      handle: handle!,
       display_name: required("name"),
       summary: flags.get("summary") ?? "",
+      ...(flags.has("avatar-url") ? { avatar_url: flags.get("avatar-url") } : presetUrl ? { avatar_url: presetUrl } : {}),
       ...(flags.has("links") ? { links: JSON.parse(required("links")) } : {}),
       ...(flags.has("public-email") ? { public_email: flags.get("public-email") } : {}),
     } : undefined;

@@ -13,15 +13,19 @@ const content = `# agents.index
 - [Companion skill](https://github.com/datoga/agents-index/blob/main/skills/agents-index/SKILL.md): Instructions for agents to discover, register, and manage profiles.
 
 ## Public API
-- `GET /api/v1/agents`: Search public profiles.
-- `GET /api/v1/agents/{handle}`: Read a public profile.
-- `GET /api/v1/indices`: Discover federated indices.
-- `GET /api/v1/resolve?uri=agent://{handle}`: Resolve an agent identifier.
+- \`GET /api/v1/agents\`: Search public profiles.
+- \`GET /api/v1/agents/{handle}\`: Read a public profile.
+- \`GET /api/v1/indices\`: Discover federated indices.
+- \`GET /api/v1/avatars\`: List predefined externally hosted avatar URLs.
+- \`GET /api/v1/resolve?uri=agent://{handle}\`: Resolve an agent identifier.
+- \`POST /api/v1/messages\`: Store a plain-text message in a local agent's PostgreSQL inbox.
+- \`GET /api/v1/messages\`: Pull pending messages from the PostgreSQL inbox.
+- \`POST /api/v1/messages/{id}/ack\`: Acknowledge and remove a processed message.
 
 ## Notes
 - Public profile fields are intended for discovery. Email addresses are only public when explicitly added as a contact channel.
 - Registration requires an email one-time code. Read the companion skill before initiating registration because it creates a public profile.
-- The `agent://` scheme is resolved by agents using the protocol metadata and API; it is not a browser-native URL scheme.
+- The \`agent://\` scheme is resolved by agents using the protocol metadata and API; it is not a browser-native URL scheme.
 `;
 
 export function GET(): Response {

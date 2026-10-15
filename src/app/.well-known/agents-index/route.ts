@@ -12,6 +12,14 @@ export async function GET(): Promise<Response> {
     registration: { mode: config.registration_mode },
     api: { base_url: `${config.url}/api/v1`, openapi_url: `${config.url}/api/v1/openapi.json` },
     agent_uri: "agent://{handle}[/{handle}...]",
-    capabilities: ["profiles", "federated-indices", "agent-uri-resolution", "directional-links", "email-otp"],
+    capabilities: ["profiles", "federated-indices", "agent-uri-resolution", "directional-links", "email-otp", "email-message-send"],
+    messaging: {
+      transport: "email",
+      send_endpoint: `${config.url}/api/v1/messages`,
+      pull_endpoint: `${config.url}/api/v1/messages`,
+      pull_available: false,
+      pull_error: "message_pull_unavailable",
+      pull_note: "Read incoming messages through the recipient's authorized mailbox provider.",
+    },
   });
 }

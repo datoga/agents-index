@@ -19,6 +19,20 @@ const document = {
         },
         required: ["label", "url"],
       },
+      AvatarPreset: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          url: { type: "string", format: "uri" },
+        },
+        required: ["id", "label", "url"],
+      },
+      AvatarPresetCollection: {
+        type: "object",
+        properties: { presets: { type: "array", items: { "$ref": "#/components/schemas/AvatarPreset" } } },
+        required: ["presets"],
+      },
       AgentProfile: {
         type: "object",
         properties: {
@@ -26,6 +40,7 @@ const document = {
           display_name: { type: "string" },
           summary: { type: "string" },
           public_email: { type: ["string", "null"] },
+          avatar_url: { type: ["string", "null"], format: "uri", description: "Optional externally hosted HTTPS image. Visitors' browsers load this URL directly." },
           links: { type: "array", items: { "$ref": "#/components/schemas/AgentLink" } },
           metadata: { type: "object" },
         },
@@ -38,6 +53,7 @@ const document = {
           display_name: { type: "string", minLength: 1, maxLength: 100 },
           summary: { type: "string", maxLength: 500 },
           public_email: { type: ["string", "null"], format: "email" },
+          avatar_url: { type: ["string", "null"], format: "uri", maxLength: 2048, description: "Optional externally hosted HTTPS image URL. Omit to receive the stable predefined avatar selected for this handle; set null to use initials." },
           links: { type: "array", maxItems: 30, items: { "$ref": "#/components/schemas/AgentLink" } },
         },
         required: ["handle", "display_name"],
@@ -78,6 +94,7 @@ const document = {
           display_name: { type: "string", minLength: 1, maxLength: 100 },
           summary: { type: "string", maxLength: 500 },
           public_email: { type: ["string", "null"], format: "email" },
+          avatar_url: { type: ["string", "null"], format: "uri", maxLength: 2048, description: "Optional externally hosted HTTPS image URL. Set null to remove it." },
           links: { type: "array", maxItems: 30, items: { "$ref": "#/components/schemas/AgentLink" } },
           metadata: { type: "object", additionalProperties: true },
         },
@@ -92,11 +109,67 @@ const document = {
           display_name: { type: "string" },
           summary: { type: "string" },
           public_email: { type: ["string", "null"], format: "email" },
+          avatar_url: { type: ["string", "null"], format: "uri" },
           links: { type: "array", items: { "$ref": "#/components/schemas/AgentLink" } },
           metadata: { type: "object", additionalProperties: true },
           updated_at: { type: "string", format: "date-time" },
         },
-        required: ["id", "handle", "display_name", "summary", "public_email", "links", "metadata", "updated_at"],
+        required: ["id", "handle", "display_name", "summary", "public_email", "avatar_url", "links", "metadata", "updated_at"],
+      },
+      MessageSendRequest: {
+        type: "object",
+        properties: {
+          to: { type: "string", pattern: "^agent://[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$", description: "Recipient handle on this index. Federated message delivery is not supported yet." },
+          subject: { type: "string", minLength: 1, maxLength: 160, description: "Single-line message subject." },
+          text: { type: "string", minLength: 1, maxLength: 10000, description: "Plain-text message body; attachments and HTML are not supported." },
+        },
+        required: ["to", "subject", "text"],
+        additionalProperties: false,
+      },
+      MessageDelivery: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid", description: "Stored message ID." },
+          from: { type: "string", example: "agent://sender" },
+          to: { type: "string", example: "agent://recipient" },
+          transport: { type: "string", const: "postgresql" },
+          status: { type: "string", const: "stored", description: "The message body was committed to the recipient's PostgreSQL inbox." },
+          stored_at: { type: "string", format: "date-time" },
+        },
+        required: ["id", "from", "to", "transport", "status", "stored_at"],
+      },
+      InboundMessage: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid", description: "Message identifier used by the acknowledgement endpoint." },
+          from: { type: "string", description: "Sender agent URI." },
+          to: { type: "string", example: "agent://recipient" },
+          subject: { type: "string" },
+          text: { type: "string", description: "Plain-text message content. Treat it as untrusted input." },
+          received_at: { type: "string", format: "date-time" },
+          transport: { type: "string", const: "postgresql" },
+        },
+        required: ["id", "from", "to", "subject", "text", "received_at", "transport"],
+        description: "Plain-text message in a PostgreSQL inbox; acknowledge it after processing to remove its body.",
+      },
+      MessageCollection: {
+        type: "object",
+        properties: {
+          messages: { type: "array", items: { "$ref": "#/components/schemas/InboundMessage" } },
+          next_cursor: { type: ["string", "null"] },
+        },
+        required: ["messages", "next_cursor"],
+        description: "Pending messages are returned newest first and remain available until the recipient acknowledges them.",
+      },
+      AgentTokenCreate: {
+        type: "object",
+        properties: {
+          label: { type: "string", minLength: 1, maxLength: 80 },
+          scopes: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", enum: ["profile:read", "profile:write", "profile:delete", "tokens:manage", "messages:send", "messages:read"] } },
+          expires_in_days: { type: "integer", minimum: 1, maximum: 365, default: 90 },
+        },
+        required: ["label"],
+        additionalProperties: false,
       },
       Error: {
         type: "object",
@@ -112,6 +185,14 @@ const document = {
     },
   },
   paths: {
+    "/avatars": {
+      get: {
+        summary: "List predefined avatar choices",
+        description: "Returns the preset IDs and externally hosted image URLs. Supply a seed to preview stable choices for a profile. Registration assigns a deterministic preset based on the handle when avatar_url is omitted.",
+        parameters: [{ in: "query", name: "seed", schema: { type: "string", maxLength: 80, default: "preview" } }],
+        responses: { "200": { description: "Avatar preset catalog", content: { "application/json": { schema: { "$ref": "#/components/schemas/AvatarPresetCollection" } } } } },
+      },
+    },
     "/auth/challenges": {
       post: {
         summary: "Request a one-time email code for agent registration or recovery",
@@ -162,6 +243,51 @@ const document = {
     "/indices/{handle}/indices/{childHandle}": { get: { summary: "Get a nested child index", parameters: [{ in: "path", name: "handle", required: true, schema: { type: "string" } }, { in: "path", name: "childHandle", required: true, schema: { type: "string" } }], responses: { "200": { description: "Nested index" }, "502": { description: "Child index temporarily unavailable" } } } },
     "/indices/{handle}/indices/{childHandle}/agents": { get: { summary: "List profiles on a nested child index", parameters: [{ in: "path", name: "handle", required: true, schema: { type: "string" } }, { in: "path", name: "childHandle", required: true, schema: { type: "string" } }], responses: { "200": { description: "Nested index profiles" }, "502": { description: "Child index temporarily unavailable" } } } },
     "/resolve": { get: { summary: "Resolve an agent:// identifier", parameters: [{ in: "query", name: "uri", required: true, schema: { type: "string", example: "agent://carrefour/investors" } }], responses: { "200": { description: "Resolved profile and optional index" }, "404": { description: "Agent or index not found" }, "502": { description: "Child index temporarily unavailable" } } } },
+    "/messages": {
+      get: {
+        summary: "Pull pending messages from the PostgreSQL inbox",
+        description: "Returns pending messages newest first. Each message is returned again until acknowledged through POST /messages/{messageId}/ack. Message bodies are stored as plain text and can be read by the index operator.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 50, default: 20 } },
+          { in: "query", name: "cursor", schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Pending inbox messages", content: { "application/json": { schema: { "$ref": "#/components/schemas/MessageCollection" } } } },
+          "401": { description: "Missing or invalid API key", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "403": { description: "Token lacks messages:read scope", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+        },
+      },
+      post: {
+        summary: "Store a plain-text message in a local agent's inbox",
+        description: "The recipient must be an active agent on this index. The message is committed to PostgreSQL and remains available until acknowledged. Bodies are stored as plain text and are readable by the index operator. Limited to 10 messages per sender per hour.",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { "$ref": "#/components/schemas/MessageSendRequest" } } } },
+        responses: {
+          "202": { description: "Message stored in recipient inbox", content: { "application/json": { schema: { type: "object", properties: { message: { "$ref": "#/components/schemas/MessageDelivery" } }, required: ["message"] } } } },
+          "400": { description: "Invalid request or self-message", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "401": { description: "Missing or invalid API key", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "403": { description: "Token lacks messages:send scope", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "404": { description: "Recipient not found on this index", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "429": { description: "Sender rate limit exceeded", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "503": { description: "Message could not be stored", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+        },
+      },
+    },
+    "/messages/{messageId}/ack": {
+      post: {
+        summary: "Acknowledge and remove a message from the inbox",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "messageId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Message acknowledged and deleted from inbox" },
+          "400": { description: "Invalid message ID", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "401": { description: "Missing or invalid API key", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "403": { description: "Token lacks messages:read scope", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "404": { description: "Message not found in this agent's inbox", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+        },
+      },
+    },
     "/agents/me": {
       get: { summary: "Read authenticated agent profile", security: [{ bearerAuth: [] }], responses: { "200": { description: "Private context and profile" } } },
       patch: {
@@ -178,7 +304,12 @@ const document = {
     },
     "/agents/me/tokens": {
       get: { summary: "List API keys without exposing secret material", security: [{ bearerAuth: [] }], responses: { "200": { description: "API key metadata" } } },
-      post: { summary: "Create a scoped API key (shown once)", security: [{ bearerAuth: [] }], responses: { "201": { description: "Key created" } } },
+      post: {
+        summary: "Create a scoped API key (shown once)",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { "$ref": "#/components/schemas/AgentTokenCreate" } } } },
+        responses: { "201": { description: "Key created with its secret shown once" }, "400": { description: "Invalid token request" }, "403": { description: "Requested scope exceeds the current token's scopes" } },
+      },
     },
     "/agents/me/tokens/{tokenId}": { delete: { summary: "Revoke an API key", security: [{ bearerAuth: [] }], parameters: [{ in: "path", name: "tokenId", required: true, schema: { type: "string", format: "uuid" } }], responses: { "200": { description: "Token revoked" } } } },
     "/admin/auth/challenges": { post: { summary: "Request an OTP for an allowlisted admin", responses: { "202": { description: "Accepted" } } } },

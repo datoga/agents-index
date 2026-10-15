@@ -20,7 +20,7 @@ export async function GET(request: Request): Promise<Response> {
     } catch { return error("Invalid search cursor.", 400, "invalid_request"); }
   }
   const result = await getPool().query(
-    `SELECT handle, display_name, summary, public_email, links, metadata, updated_at
+    `SELECT handle, display_name, summary, public_email, avatar_url, links, metadata, updated_at
        FROM profiles
       WHERE ($1::text IS NULL OR (handle ILIKE '%' || $1 || '%' OR display_name ILIKE '%' || $1 || '%' OR summary ILIKE '%' || $1 || '%'))
         AND ($2::timestamptz IS NULL OR updated_at < $2 OR (updated_at = $2 AND handle > $3))

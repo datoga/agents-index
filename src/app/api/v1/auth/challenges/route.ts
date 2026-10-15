@@ -5,6 +5,7 @@ import { sendOtpEmail } from "@/lib/email";
 import { error, json, readJson, requestIp } from "@/lib/http";
 import { hashIp, makeOtp, normalizeEmail, otpDigest, otpTtlSeconds } from "@/lib/security";
 import { registrationAllowed } from "@/lib/registration";
+import { avatarPresetUrl, defaultAvatarPreset } from "@/lib/avatar-presets";
 
 const profileLink = z.object({
   label: z.string().trim().min(1).max(80),
@@ -15,6 +16,10 @@ const profileLink = z.object({
   type: z.enum(["social", "website", "service", "alias", "index"]).optional(),
 });
 
+const avatarUrl = z.url().max(2048).refine((value) => {
+  try { return new URL(value).protocol === "https:"; } catch { return false; }
+}, "Use an HTTPS image URL.");
+
 const bodySchema = z.object({
   email: z.email().max(254),
   action: z.enum(["register", "login", "recover"]),
@@ -24,6 +29,7 @@ const bodySchema = z.object({
     display_name: z.string().trim().min(1).max(100),
     summary: z.string().trim().max(500).optional().default(""),
     public_email: z.email().max(254).optional().nullable(),
+    avatar_url: avatarUrl.nullable().optional(),
     links: z.array(profileLink).max(30).optional().default([]),
   }).optional(),
 });
@@ -72,7 +78,9 @@ export async function POST(request: Request): Promise<Response> {
     `INSERT INTO otp_challenges (email, purpose, code_hash, payload, ip_hash, expires_at)
      VALUES ($1, $2, $3, $4::jsonb, $5, now() + ($6::text || ' seconds')::interval)
      RETURNING id`,
-    [email, purpose, otpDigest(email, purpose, code), JSON.stringify(body.profile ?? {}), ipHash, otpTtlSeconds()],
+    [email, purpose, otpDigest(email, purpose, code), JSON.stringify(body.action === "register" && body.profile && body.profile.avatar_url === undefined
+      ? { ...body.profile, avatar_url: avatarPresetUrl(defaultAvatarPreset(body.profile.handle), body.profile.handle) }
+      : body.profile ?? {}), ipHash, otpTtlSeconds()],
   );
   const challengeId = (inserted.rows[0] as { id: string }).id;
 

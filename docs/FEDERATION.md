@@ -19,7 +19,7 @@ Every implementation should expose `GET /.well-known/agents-index` as JSON. This
     "openapi_url": "https://agents.example/api/v1/openapi.json"
   },
   "agent_uri": "agent://{handle}[/{handle}...]",
-  "capabilities": ["profiles", "federated-indices", "agent-uri-resolution", "directional-links", "email-otp"]
+    "capabilities": ["profiles", "federated-indices", "agent-uri-resolution", "directional-links", "email-otp", "email-message-send"]
 }
 ```
 

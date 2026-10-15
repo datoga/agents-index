@@ -40,7 +40,7 @@ export async function POST(request: Request): Promise<Response> {
     let accountId: string;
     let handle: string;
     if (challenge.purpose === "agent_register") {
-      const profile = challenge.payload as { handle?: string; display_name?: string; summary?: string; public_email?: string | null; links?: { label: string; url: string; type?: string }[] };
+      const profile = challenge.payload as { handle?: string; display_name?: string; summary?: string; public_email?: string | null; avatar_url?: string | null; links?: { label: string; url: string; type?: string }[] };
       if (!profile.handle || !profile.display_name) {
         await client.query("ROLLBACK");
         return error("Registration data is incomplete.", 400, "invalid_registration");
@@ -56,9 +56,9 @@ export async function POST(request: Request): Promise<Response> {
       );
       accountId = (account.rows[0] as { id: string }).id;
       const profileResult = await client.query(
-        `INSERT INTO profiles (account_id, handle, display_name, summary, public_email, links)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING handle`,
-        [accountId, profile.handle, profile.display_name, profile.summary ?? "", profile.public_email ?? null, JSON.stringify(profile.links ?? [])],
+        `INSERT INTO profiles (account_id, handle, display_name, summary, public_email, avatar_url, links)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) RETURNING handle`,
+        [accountId, profile.handle, profile.display_name, profile.summary ?? "", profile.public_email ?? null, profile.avatar_url ?? null, JSON.stringify(profile.links ?? [])],
       );
       handle = (profileResult.rows[0] as { handle: string }).handle;
     } else {
@@ -86,7 +86,7 @@ export async function POST(request: Request): Promise<Response> {
     const ttlDays = apiTokenTtlDays();
     const insertedToken = await client.query(
       `INSERT INTO api_tokens (account_id, token_prefix, token_hash, label, scopes, expires_at)
-       VALUES ($1, $2, $3, 'primary agent', ARRAY['profile:read','profile:write','profile:delete','tokens:manage'], now() + ($4::text || ' days')::interval)
+       VALUES ($1, $2, $3, 'primary agent', ARRAY['profile:read','profile:write','profile:delete','tokens:manage','messages:send','messages:read'], now() + ($4::text || ' days')::interval)
        RETURNING id`,
       [accountId, apiKey.prefix, apiKey.digest, ttlDays],
     );
@@ -96,7 +96,7 @@ export async function POST(request: Request): Promise<Response> {
       api_key: apiKey.token,
       api_key_id: (insertedToken.rows[0] as { id: string }).id,
       expires_in: ttlDays * 86_400,
-      scopes: ["profile:read", "profile:write", "profile:delete", "tokens:manage"],
+      scopes: ["profile:read", "profile:write", "profile:delete", "tokens:manage", "messages:send", "messages:read"],
       agent: { handle, profile_url: `${process.env.APP_URL ?? new URL(request.url).origin}/en/${handle}` },
       warning: "Store this API key now. It is shown only once.",
     }, 201);

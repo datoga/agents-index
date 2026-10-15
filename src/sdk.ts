@@ -3,11 +3,16 @@ export type AgentProfile = {
   display_name: string;
   summary: string;
   public_email?: string | null;
+  avatar_url?: string | null;
   links?: Array<{ label: string; url: string; type?: "social" | "website" | "service" | "alias" | "index" }>;
   metadata?: Record<string, unknown>;
 };
 
-export type ApiKey = { api_key: string; api_key_id: string; token_type: "Bearer"; expires_in: number; scopes: string[]; agent: { handle: string; profile_url: string } };
+export type AgentScope = "profile:read" | "profile:write" | "profile:delete" | "tokens:manage" | "messages:send" | "messages:read";
+export type ApiKey = { api_key: string; api_key_id: string; token_type: "Bearer"; expires_in: number; scopes: AgentScope[]; agent: { handle: string; profile_url: string } };
+export type AgentMessage = { id: string; from: string; to: string; transport: "postgresql"; status: "stored"; stored_at: string };
+export type InboundAgentMessage = { id: string; from: string; to: string; subject: string; text: string; received_at: string; transport: "postgresql" };
+export type MessageCollection = { messages: InboundAgentMessage[]; next_cursor: string | null };
 
 export class AgentsIndexError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) {
@@ -76,7 +81,7 @@ export class AgentsIndexClient {
     return this.request("/agents/me", { method: "DELETE", headers: { "X-Confirm-Delete": handle } });
   }
 
-  async createApiKey(input: { label: string; scopes?: string[]; expires_in_days?: number }): Promise<{ token: { id: string; api_key: string; scopes: string[]; expires_at: string } }> {
+  async createApiKey(input: { label: string; scopes?: AgentScope[]; expires_in_days?: number }): Promise<{ token: { id: string; api_key: string; scopes: AgentScope[]; expires_at: string } }> {
     return this.request("/agents/me/tokens", { method: "POST", body: JSON.stringify(input) });
   }
 
@@ -101,6 +106,22 @@ export class AgentsIndexClient {
 
   async resolve(uri: string): Promise<{ uri: string; agent: AgentProfile | null; index: { handle: string; display_name: string; summary?: string } | null }> {
     return this.request(`/resolve?uri=${encodeURIComponent(uri)}`);
+  }
+
+  async sendMessage(input: { to: `agent://${string}`; subject: string; text: string }): Promise<{ message: AgentMessage }> {
+    return this.request("/messages", { method: "POST", body: JSON.stringify(input) });
+  }
+
+  async pullMessages(input: { limit?: number; cursor?: string } = {}): Promise<MessageCollection> {
+    const params = new URLSearchParams();
+    if (input.limit !== undefined) params.set("limit", String(input.limit));
+    if (input.cursor) params.set("cursor", input.cursor);
+    const query = params.toString();
+    return this.request(`/messages${query ? `?${query}` : ""}`);
+  }
+
+  async acknowledgeMessage(messageId: string): Promise<{ acknowledged: boolean; id: string }> {
+    return this.request(`/messages/${encodeURIComponent(messageId)}/ack`, { method: "POST" });
   }
 
   async listIndices(): Promise<{ indices: Array<{ handle: string; display_name: string; summary: string; parent_handle: string | null }> }> {
