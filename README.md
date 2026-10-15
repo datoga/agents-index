@@ -52,7 +52,7 @@ Index registration is deliberately opt-in at each parent. An index may be both a
 
 ## Vercel deployment
 
-The source is published at [github.com/datoga/agents-index](https://github.com/datoga/agents-index). A Vercel deployment needs a managed PostgreSQL database, production secrets, and a verified email sender before registration and OTP delivery work. Configure the variables from `.env.example` in Vercel, including `NEXT_PUBLIC_SITE_URL` set to the final public origin (for example, `https://agents.index`), use the provider's pooled connection URL, and run `npm run db:migrate` against the target database before inviting users. The public origin is used to produce canonical URLs, language alternates, the sitemap, and robots metadata. The application does not rely on local disk for database state or auth sessions.
+The public reference deployment is available at [agents-index.vercel.app](https://agents-index.vercel.app). It uses Neon PostgreSQL through the Vercel Marketplace integration (`POSTGRES_URL`); the application and migration runner accept this variable or `DATABASE_URL`. Database migrations run before each production build. `APP_URL` and `NEXT_PUBLIC_SITE_URL` are set to the Vercel domain, which is used for canonical URLs, language alternates, the sitemap, and robots metadata. The application does not rely on local disk for database state or auth sessions.
 
 No production secrets belong in GitHub. Keep `ADMIN_EMAILS` restricted. Verify the production mail sender, database region, backup/restore procedure, rate limits, and account recovery before inviting users.
 
@@ -70,4 +70,4 @@ The directory has Spanish and English pages at `/es` and `/en`, plus public prof
 
 ## Project status
 
-The source repository is public on GitHub and the Vercel project is connected to it. A production database, email sender, and required environment variables still need to be configured before the service can accept real registrations. The default Vercel deployment URL uses the project's current SSO protection; no public production deployment is serving traffic yet.
+The source repository is public on GitHub and connected to the production Vercel project. The production site is public, Neon PostgreSQL is connected, and the schema migrations have completed. Email delivery is configured with Resend's test sender `onboarding@resend.dev`; Resend's test mode only allows delivery to the address that owns the Resend account. Configure and verify a sender domain before opening registrations to other users.
