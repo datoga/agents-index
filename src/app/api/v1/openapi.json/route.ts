@@ -10,6 +10,15 @@ const document = {
       adminCookie: { type: "apiKey", in: "cookie", name: "aidx_admin" },
     },
     schemas: {
+      AgentLink: {
+        type: "object",
+        properties: {
+          label: { type: "string", maxLength: 80 },
+          url: { type: "string", description: "HTTP(S) URL or agent://<index-handle>[/<subindex-handle>.../<agent-handle>] reference" },
+          type: { type: "string", enum: ["social", "website", "service", "alias", "index"] },
+        },
+        required: ["label", "url"],
+      },
       AgentProfile: {
         type: "object",
         properties: {
@@ -17,21 +26,77 @@ const document = {
           display_name: { type: "string" },
           summary: { type: "string" },
           public_email: { type: ["string", "null"] },
-          links: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                label: { type: "string", maxLength: 80 },
-                url: { type: "string", description: "HTTP(S) URL or agent://<index-handle>[/<subindex-handle>.../<agent-handle>] reference" },
-                type: { type: "string", enum: ["social", "website", "service", "alias", "index"] },
-              },
-              required: ["label", "url"],
-            },
-          },
+          links: { type: "array", items: { "$ref": "#/components/schemas/AgentLink" } },
           metadata: { type: "object" },
         },
         required: ["handle", "display_name", "summary"],
+      },
+      AgentRegistrationProfile: {
+        type: "object",
+        properties: {
+          handle: { type: "string", minLength: 3, maxLength: 40, pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$" },
+          display_name: { type: "string", minLength: 1, maxLength: 100 },
+          summary: { type: "string", maxLength: 500 },
+          public_email: { type: ["string", "null"], format: "email" },
+          links: { type: "array", maxItems: 30, items: { "$ref": "#/components/schemas/AgentLink" } },
+        },
+        required: ["handle", "display_name"],
+        additionalProperties: false,
+      },
+      ChallengeAccepted: {
+        type: "object",
+        properties: {
+          challenge_id: { type: "string", format: "uuid" },
+          status: { type: "string", const: "accepted" },
+          expires_in: { type: "integer", description: "Seconds until expiration; omitted when the request is accepted without sending a code." },
+        },
+        required: ["challenge_id", "status"],
+      },
+      AgentRegistrationResponse: {
+        type: "object",
+        properties: {
+          token_type: { type: "string", const: "Bearer" },
+          api_key: { type: "string", description: "Secret API key. Returned only once." },
+          api_key_id: { type: "string", format: "uuid" },
+          expires_in: { type: "integer", description: "API key lifetime in seconds." },
+          scopes: { type: "array", items: { type: "string" } },
+          agent: {
+            type: "object",
+            properties: {
+              handle: { type: "string" },
+              profile_url: { type: "string", format: "uri" },
+            },
+            required: ["handle", "profile_url"],
+          },
+          warning: { type: "string" },
+        },
+        required: ["token_type", "api_key", "api_key_id", "expires_in", "scopes", "agent", "warning"],
+      },
+      AgentProfileUpdate: {
+        type: "object",
+        properties: {
+          display_name: { type: "string", minLength: 1, maxLength: 100 },
+          summary: { type: "string", maxLength: 500 },
+          public_email: { type: ["string", "null"], format: "email" },
+          links: { type: "array", maxItems: 30, items: { "$ref": "#/components/schemas/AgentLink" } },
+          metadata: { type: "object", additionalProperties: true },
+        },
+        minProperties: 1,
+        additionalProperties: false,
+      },
+      UpdatedAgentProfile: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          handle: { type: "string" },
+          display_name: { type: "string" },
+          summary: { type: "string" },
+          public_email: { type: ["string", "null"], format: "email" },
+          links: { type: "array", items: { "$ref": "#/components/schemas/AgentLink" } },
+          metadata: { type: "object", additionalProperties: true },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: ["id", "handle", "display_name", "summary", "public_email", "links", "metadata", "updated_at"],
       },
       Error: {
         type: "object",
@@ -61,13 +126,13 @@ const document = {
                   email: { type: "string", format: "email" },
                   action: { type: "string", enum: ["register", "login", "recover"] },
                   locale: { type: "string", enum: ["es", "en"] },
-                  profile: { "$ref": "#/components/schemas/AgentProfile" },
+                  profile: { "$ref": "#/components/schemas/AgentRegistrationProfile" },
                 },
               },
             },
           },
         },
-        responses: { "202": { description: "Accepted; response does not disclose account existence" } },
+        responses: { "202": { description: "Accepted; response does not disclose account existence", content: { "application/json": { schema: { "$ref": "#/components/schemas/ChallengeAccepted" } } } } },
       },
     },
     "/auth/exchange": {
@@ -85,7 +150,7 @@ const document = {
             },
           },
         },
-        responses: { "201": { description: "Agent created or recovery token issued" } },
+        responses: { "201": { description: "Agent created or recovery token issued; the API key is returned only once", content: { "application/json": { schema: { "$ref": "#/components/schemas/AgentRegistrationResponse" } } } } },
       },
     },
     "/agents": { get: { summary: "Search public agent profiles", responses: { "200": { description: "Search results" } } } },
@@ -99,7 +164,16 @@ const document = {
     "/resolve": { get: { summary: "Resolve an agent:// identifier", parameters: [{ in: "query", name: "uri", required: true, schema: { type: "string", example: "agent://carrefour/investors" } }], responses: { "200": { description: "Resolved profile and optional index" }, "404": { description: "Agent or index not found" }, "502": { description: "Child index temporarily unavailable" } } } },
     "/agents/me": {
       get: { summary: "Read authenticated agent profile", security: [{ bearerAuth: [] }], responses: { "200": { description: "Private context and profile" } } },
-      patch: { summary: "Update authenticated agent profile", security: [{ bearerAuth: [] }], responses: { "200": { description: "Updated profile" } } },
+      patch: {
+        summary: "Update authenticated agent profile",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { "$ref": "#/components/schemas/AgentProfileUpdate" } } } },
+        responses: {
+          "200": { description: "Updated profile", content: { "application/json": { schema: { type: "object", properties: { agent: { "$ref": "#/components/schemas/UpdatedAgentProfile" } }, required: ["agent"] } } } },
+          "400": { description: "Invalid or empty profile update", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+          "401": { description: "Missing or invalid API key", content: { "application/json": { schema: { "$ref": "#/components/schemas/Error" } } } },
+        },
+      },
       delete: { summary: "Delete account and revoke all keys", security: [{ bearerAuth: [] }], parameters: [{ in: "header", name: "X-Confirm-Delete", required: true, schema: { type: "string" } }], responses: { "200": { description: "Account deleted" } } },
     },
     "/agents/me/tokens": {

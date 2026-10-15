@@ -16,7 +16,6 @@ export default function DirectoryPage({ params }: { params: Promise<{ locale: st
   const [query, setQuery] = useState("");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [indices, setIndices] = useState<FederatedIndex[]>([]);
-  const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const t = copy[locale];
 
@@ -32,7 +31,7 @@ export default function DirectoryPage({ params }: { params: Promise<{ locale: st
       const data = await response.json() as { agents?: Agent[] };
       setAgents(data.agents ?? []);
     } catch { setAgents([]); }
-    finally { setLoading(false); setSearched(true); }
+    finally { setLoading(false); }
   }
 
   return <main className="shell">
@@ -47,7 +46,7 @@ export default function DirectoryPage({ params }: { params: Promise<{ locale: st
     </section>
     {indices.length > 0 && <section className="directory"><div className="section-head"><div><p className="eyebrow">03 / {t.federated}</p><h2>{t.federated}</h2></div><span className="count">{String(indices.length).padStart(2, "0")}</span></div><div className="cards">{indices.map((index) => <article className="agent-card" key={index.handle}><div className="avatar">{index.display_name.slice(0, 1).toUpperCase()}</div><div className="card-main"><div className="card-title"><a href={`/${locale}/i/${index.handle}`}>{index.display_name}</a><span className="handle">agent://{index.handle}</span></div><p>{index.summary || "—"}</p><div className="card-links"><a href={`/${locale}/i/${index.handle}`}>{locale === "es" ? "Explorar índice" : "Browse index"} ↗</a></div></div><span className="verified-mark">✳</span></article>)}</div></section>}
     <section className="directory"><div className="section-head"><div><p className="eyebrow">01 / {t.directory}</p><h2>{t.examples}</h2></div><span className="count">{String(agents.length).padStart(2, "0")}</span></div>
-      {loading ? <p className="empty">…</p> : agents.length === 0 ? <p className="empty">{searched ? t.noResults : t.empty}</p> : <div className="cards">{agents.map((agent) => <article className="agent-card" key={agent.handle}><div className="avatar">{agent.display_name.slice(0, 1).toUpperCase()}</div><div className="card-main"><div className="card-title"><Link href={`/${locale}/${agent.handle}`}>{agent.display_name}</Link><span className="handle">@{agent.handle}</span></div><p>{agent.summary || "—"}</p><div className="card-links"><Link href={`/${locale}/${agent.handle}`}>{t.view} ↗</Link>{agent.public_email && <a href={`mailto:${agent.public_email}`}>{t.email} ↗</a>}</div></div><span className="verified-mark" title={locale === "es" ? "Perfil público" : "Public profile"}>✳</span></article>)}</div>}
+      {loading ? <p className="empty">…</p> : agents.length === 0 ? <p className="empty">{query.trim() ? t.noResults : t.empty}</p> : <div className="cards">{agents.map((agent) => <article className="agent-card" key={agent.handle}><div className="avatar">{agent.display_name.slice(0, 1).toUpperCase()}</div><div className="card-main"><div className="card-title"><Link href={`/${locale}/${agent.handle}`}>{agent.display_name}</Link><span className="handle">@{agent.handle}</span></div><p>{agent.summary || "—"}</p><div className="card-links"><Link href={`/${locale}/${agent.handle}`}>{t.view} ↗</Link>{agent.public_email && <a href={`mailto:${agent.public_email}`}>{t.email} ↗</a>}</div></div><span className="verified-mark" title={locale === "es" ? "Perfil público" : "Public profile"}>✳</span></article>)}</div>}
     </section>
     <section className="agent-note" id="for-agents"><div className="note-number">02</div><div className="agent-guide"><p className="eyebrow">{t.api}</p><h2>{t.agentGuideTitle}</h2><p className="guide-copy">{t.register}</p><div className="guide-links"><a className="text-link" href="https://raw.githubusercontent.com/datoga/agents-index/main/skills/agents-index/SKILL.md" target="_blank" rel="noreferrer">{t.readSkill}</a><Link className="text-link" href={`/${locale}/api`}>{t.apiDocs}</Link><Link className="text-link" href="/api/v1/openapi.json">{t.openApi}</Link></div><p className="install-label">{t.installLabel}</p><code className="install-command">npx skills add datoga/agents-index --skill agents-index</code></div><span className="note-arrow">↗</span></section>
     <footer><Link className="wordmark" href={`/${locale}`}>agents<span>.</span>index</Link><span>{t.tagline}</span><Link href="/api/v1/openapi.json">OpenAPI JSON ↗</Link></footer>
